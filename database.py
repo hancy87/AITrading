@@ -427,6 +427,47 @@ def get_historical_trading_data(limit=10):
     finally:
         conn.close()
 
+def get_daily_api_costs(limit=30):
+    """
+    지정된 기간 동안의 일일 API 비용 기록을 가져옵니다.
+
+    매개변수:
+        limit (int): 가져올 최대 일수
+
+    반환값:
+        list: 일일 API 비용 데이터 사전 목록
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("""
+        SELECT 
+            date,
+            total_cost,
+            total_calls,
+            total_tokens
+        FROM 
+            daily_api_costs
+        ORDER BY 
+            date DESC
+        LIMIT ?
+        """, (limit,))
+
+        results = cursor.fetchall()
+
+        # 결과를 사전 목록으로 변환
+        daily_costs = []
+        for row in results:
+            daily_costs.append(dict(row))
+
+        return daily_costs
+    except Exception as e:
+        print(f"일일 API 비용 기록 조회 중 오류: {e}")
+        return []
+    finally:
+        conn.close()
+
 def get_performance_metrics():
     """
     거래 성과 메트릭스를 계산합니다

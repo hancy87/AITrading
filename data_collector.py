@@ -435,6 +435,61 @@ def analyze_price_action(price_data):
         'volatility_percentage': volatility
     }
 
+def analyze_volume_data(price_data, period=20):
+    """
+    거래량 데이터 분석
+
+    매개변수:
+        price_data: 가격 데이터 목록 (OHLCV 딕셔너리 리스트)
+        period (int): 거래량 이동 평균 계산 기간
+
+    반환값:
+        dict: 거래량 분석 결과
+    """
+    if not price_data or len(price_data) < period:
+        return {
+            'current_volume': 0,
+            'average_volume': 0,
+            'volume_ratio': 0, # 현재 거래량 / 평균 거래량
+            'volume_spike': False, # 평균 대비 급증 여부
+            'trend_confirmation': 'neutral' # 거래량이 현재 캔들 방향을 지지하는지
+        }
+    
+    volumes = [candle['volume'] for candle in price_data]
+    current_volume = volumes[-1]
+    
+    # 거래량 이동 평균 계산
+    avg_volume = sum(volumes[-period:]) / period
+    
+    # 현재 거래량과 평균 거래량 비율
+    volume_ratio = current_volume / avg_volume if avg_volume > 0 else 0
+    
+    # 거래량 급증 확인 (예: 평균의 2배 이상)
+    volume_spike = volume_ratio > 2.0
+    
+    # 거래량과 가격 방향 관계 분석
+    current_candle = price_data[-1]
+    is_bullish = current_candle['close'] > current_candle['open']
+    is_bearish = current_candle['close'] < current_candle['open']
+    trend_confirmation = 'neutral'
+    
+    if volume_ratio > 1.1: # 평균보다 높은 거래량 동반 시
+        if is_bullish:
+            trend_confirmation = 'bullish_confirmed' # 상승 추세 확인
+        elif is_bearish:
+            trend_confirmation = 'bearish_confirmed' # 하락 추세 확인
+    elif volume_ratio < 0.9: # 평균보다 낮은 거래량 동반 시
+        if is_bullish or is_bearish:
+            trend_confirmation = 'weak_confirmation' # 추세 약화 가능성
+            
+    return {
+        'current_volume': current_volume,
+        'average_volume': avg_volume,
+        'volume_ratio': volume_ratio,
+        'volume_spike': volume_spike,
+        'trend_confirmation': trend_confirmation
+    }
+
 def get_full_market_analysis(exchange):
     """
     시장 데이터를 가져와 종합적인 분석 수행
@@ -443,7 +498,7 @@ def get_full_market_analysis(exchange):
         exchange: 초기화된 거래소 객체
         
     반환값:
-        dict: 시장 데이터와 분석 결과
+        dict: 시장 데이터와 분석 결과 (거래량 분석 포함)
     """
     try:
         # 기본 시장 데이터 조회
@@ -451,14 +506,16 @@ def get_full_market_analysis(exchange):
         if not market_data:
             return None
         
-        # 여러 타임프레임에 대한 기술적 지표 분석
+        # 여러 타임프레임에 대한 기술적 지표, 가격 행동, 거래량 분석
         technical_indicators = {}
         price_action = {}
+        volume_analysis = {}
         
         for timeframe, data in market_data['timeframes'].items():
             if data:
                 technical_indicators[timeframe] = calculate_technical_indicators(data)
                 price_action[timeframe] = analyze_price_action(data)
+                volume_analysis[timeframe] = analyze_volume_data(data)
         
         # 분석 결과 종합
         analysis_result = {
@@ -466,6 +523,7 @@ def get_full_market_analysis(exchange):
             'current_price': market_data['current_price'],
             'technical_indicators': technical_indicators,
             'price_action': price_action,
+            'volume_analysis': volume_analysis, # 거래량 분석 결과 추가
             'news': market_data['news'],
             'raw_data': {
                 'timeframes': market_data['timeframes']
