@@ -3,10 +3,16 @@ AI 분석 및 거래 결정 모듈
 """
 import json
 import time
+import logging
 from datetime import datetime
 import traceback
-from config import client, OPENROUTER_MODEL, MAX_API_RETRIES, MAX_REASONING_LENGTH
-from database import save_ai_analysis, get_performance_metrics, get_historical_trading_data
+from config import (
+    client, OPENROUTER_MODEL, MAX_API_RETRIES, MAX_REASONING_LENGTH,
+    MODEL_COST_INPUT_PER_MILLION_TOKENS, MODEL_COST_OUTPUT_PER_MILLION_TOKENS
+)
+from database import save_ai_analysis, get_performance_metrics, get_historical_trading_data, update_daily_api_cost
+
+logger = logging.getLogger(__name__)
 
 def process_ai_analysis(market_analysis):
     """
@@ -16,10 +22,10 @@ def process_ai_analysis(market_analysis):
         market_analysis (dict): 시장 데이터 및 분석 결과
         
     반환값:
-        dict: AI 분석 결과 및 거래 추천 데이터
+        dict: AI 분석 결과 및 거래 추천 데이터 (토큰 사용량, 비용 포함)
     """
     if not market_analysis:
-        print("시장 분석 데이터가 없어 AI 분석을 진행할 수 없습니다.")
+        logger.warning("시장 분석 데이터가 없어 AI 분석을 진행할 수 없습니다.")
         return None
     
     # 트레이딩 성과 지표 조회
@@ -78,39 +84,55 @@ def process_ai_analysis(market_analysis):
         
         for attempt in range(MAX_API_RETRIES):
             try:
-                print(f"AI 분석 요청 중... (시도 {attempt+1}/{MAX_API_RETRIES})")
+                logger.info(f"AI 분석 요청 중... (시도 {attempt+1}/{MAX_API_RETRIES})")
                 
+                if client is None:
+                    logger.error("OpenAI 클라이언트가 초기화되지 않았습니다. API 호출 불가.")
+                    return None
+                    
                 # OpenRouter API 호출
                 response = client.chat.completions.create(
                     model=OPENROUTER_MODEL,
                     messages=messages,
                     temperature=0.2,  # 낮은 온도로 일관된 응답 유도
-                    max_tokens=100000,
+                    max_tokens=2000,  # 이전 오류 기반으로 토큰 증가
                     response_format={"type": "json_object"}
                 )
                 
                 break  # 성공 시 반복 중단
             except Exception as e:
                 error_message = f"AI API 요청 오류 (시도 {attempt+1}): {str(e)}"
-                print(error_message)
+                logger.warning(error_message)
                 error_messages.append(error_message)
                 if attempt < MAX_API_RETRIES - 1:
                     time.sleep(10)  # 재시도 전 10초 대기
         
         # 응답이 없는 경우 또는 None인 경우
-        if not response: # response가 None일 경우도 포함됨
+        if not response:
             combined_errors = "; ".join(error_messages)
-            print(f"최대 시도 횟수 초과 또는 유효한 API 응답 없음, AI 분석 실패: {combined_errors}")
-            print(f"최종 response 객체: {response}") # response 객체 로깅 추가
+            logger.error(f"최대 시도 횟수 초과 또는 유효한 API 응답 없음, AI 분석 실패: {combined_errors}")
+            logger.debug(f"최종 response 객체: {response}")
             return None
-
-        # 응답 객체가 None이 아닐 때만 아래 코드 실행
-        print(f"수신된 response 객체: {response}") # 상세 로깅 추가
+            
+        logger.debug(f"수신된 response 객체: {response}")
         try:
+            # 토큰 사용량 추출
+            usage = response.usage
+            usage_data = {
+                'completion_tokens': usage.completion_tokens if usage else 0,
+                'prompt_tokens': usage.prompt_tokens if usage else 0,
+                'total_tokens': usage.total_tokens if usage else 0
+            }
+            logger.info(f"API 사용량: 입력 {usage_data['prompt_tokens']}, 출력 {usage_data['completion_tokens']}, 총 {usage_data['total_tokens']} 토큰")
+
+            # API 비용 계산
+            input_cost = (usage_data['prompt_tokens'] / 1_000_000) * MODEL_COST_INPUT_PER_MILLION_TOKENS
+            output_cost = (usage_data['completion_tokens'] / 1_000_000) * MODEL_COST_OUTPUT_PER_MILLION_TOKENS
+            total_cost = input_cost + output_cost
+            logger.info(f"해당 API 호출 비용: ${total_cost:.6f}")
+            
             # AI 응답 추출 및 처리
             ai_content = response.choices[0].message.content
-            
-            # AI 응답 JSON 파싱 전처리
             cleaned_json = clean_ai_response(ai_content)
             
             try:
@@ -122,7 +144,7 @@ def process_ai_analysis(market_analysis):
                 
                 for field in required_fields:
                     if field not in analysis_result:
-                        print(f"AI 응답에 필수 필드가 누락되었습니다: {field}")
+                        logger.error(f"AI 응답에 필수 필드가 누락되었습니다: {field}")
                         return None
                         
                 # 값 정규화 및 유효성 검사
@@ -130,44 +152,53 @@ def process_ai_analysis(market_analysis):
                 if analysis_result["direction"] not in ["LONG", "SHORT", "NO_POSITION"]:
                     analysis_result["direction"] = "NO_POSITION"  # 기본값
                     
-                # 포지션 크기 제한 (0.1 ~ 1.0)
                 pos_size = float(analysis_result["recommended_position_size"])
                 analysis_result["recommended_position_size"] = max(0.1, min(1.0, pos_size))
                 
-                # 레버리지 제한 (1 ~ 5)
                 leverage = int(float(analysis_result["recommended_leverage"]))
                 analysis_result["recommended_leverage"] = max(1, min(5, leverage))
                 
-                # 스탑로스, 테이크프로핏 백분율 (소수점으로 변환)
                 sl_pct = float(analysis_result["stop_loss_percentage"])
                 tp_pct = float(analysis_result["take_profit_percentage"])
                 analysis_result["stop_loss_percentage"] = max(0.5, min(10.0, sl_pct))
                 analysis_result["take_profit_percentage"] = max(1.0, min(20.0, tp_pct))
                 
-                # 추론 내용 길이 제한
                 if len(analysis_result["reasoning"]) > MAX_REASONING_LENGTH:
                     analysis_result["reasoning"] = analysis_result["reasoning"][:MAX_REASONING_LENGTH] + "..."
                 
-                # 현재 가격 추가
+                # 분석 결과에 사용량 및 비용 정보 추가
                 analysis_result["current_price"] = current_price
+                analysis_result["usage_data"] = usage_data
+                analysis_result["api_cost"] = total_cost
                 
                 return analysis_result
+                
             except json.JSONDecodeError as e:
-                print(f"AI 응답을 JSON으로 파싱할 수 없습니다: {e}")
-                print(f"원본 응답: {ai_content}")
-                print(f"정제된 응답: {cleaned_json}")
+                logger.error(f"AI 응답을 JSON으로 파싱할 수 없습니다: {e}")
+                logger.debug(f"원본 응답: {ai_content}")
+                logger.debug(f"정제된 응답: {cleaned_json}")
                 return None
-            except TypeError as te:
-                print(f"응답 내용 접근 중 TypeError 발생: {te}")
-                print(f"문제를 일으킨 response 객체: {response}") # 오류 발생 시 response 로깅
+            except Exception as e:
+                logger.error(f"AI 응답 내용 처리 중 오류 발생: {e}")
+                logger.debug(traceback.format_exc())
                 return None
+
+        except TypeError as te:
+             logger.error(f"응답 내용 접근 중 TypeError 발생: {te}")
+             logger.error(f"문제를 일으킨 response 객체: {response}")
+             return None
+        except AttributeError as ae:
+             logger.error(f"응답 객체 속성 접근 중 오류 발생: {ae}")
+             logger.error(f"문제를 일으킨 response 객체: {response}")
+             return None
         except Exception as e:
-            print(f"AI 응답 처리 중 오류 발생: {e}")
-            traceback.print_exc()
+            logger.error(f"API 응답 처리 중 예상치 못한 오류: {e}")
+            logger.debug(traceback.format_exc())
             return None
+            
     except Exception as e:
-        print(f"AI 분석 과정에서 예외 발생: {e}")
-        traceback.print_exc()
+        logger.error(f"AI 분석 과정에서 예외 발생: {e}")
+        logger.debug(traceback.format_exc())
         return None
 
 def clean_ai_response(response_text):
@@ -206,7 +237,7 @@ def clean_ai_response(response_text):
         # 그대로 반환
         return response_text.strip()
     except Exception as e:
-        print(f"AI 응답 정제 중 오류: {e}")
+        logger.warning(f"AI 응답 정제 중 오류: {e}")
         return response_text
 
 def create_market_summary(market_analysis, performance_metrics, trading_history):
@@ -363,30 +394,40 @@ def create_market_summary(market_analysis, performance_metrics, trading_history)
 
 def save_analysis_to_db(analysis_data):
     """
-    AI 분석 결과를 데이터베이스에 저장
+    AI 분석 결과를 데이터베이스에 저장하고 일일 비용 업데이트
     
     매개변수:
-        analysis_data (dict): 저장할 AI 분석 결과
+        analysis_data (dict): 저장할 AI 분석 결과 (usage_data, api_cost 포함)
         
     반환값:
         int: 생성된 분석 기록의 ID 또는 None (실패 시)
     """
     try:
         if not analysis_data:
-            print("저장할 분석 데이터가 없습니다.")
+            logger.warning("저장할 분석 데이터가 없습니다.")
             return None
             
+        usage_data = analysis_data.get('usage_data')
+        api_cost = analysis_data.get('api_cost', 0.0)
+        total_tokens = usage_data.get('total_tokens', 0) if usage_data else 0
+            
         # 데이터베이스에 저장
-        analysis_id = save_ai_analysis(analysis_data)
+        analysis_id = save_ai_analysis(analysis_data, usage_data=usage_data, api_cost=api_cost)
         
         if analysis_id:
-            print(f"AI 분석 결과가 데이터베이스에 저장되었습니다. (ID: {analysis_id})")
+            logger.info(f"AI 분석 결과가 데이터베이스에 저장되었습니다. (ID: {analysis_id})")
+            
+            # 일일 API 비용 업데이트
+            today_date_str = datetime.now().strftime('%Y-%m-%d')
+            update_daily_api_cost(today_date_str, api_cost, total_tokens)
+            logger.info(f"{today_date_str} API 비용 업데이트: +${api_cost:.6f}, +{total_tokens} 토큰")
         else:
-            print("AI 분석 결과 저장에 실패했습니다.")
+            logger.error("AI 분석 결과 저장에 실패했습니다.")
             
         return analysis_id
     except Exception as e:
-        print(f"분석 데이터 저장 중 오류: {e}")
+        logger.error(f"분석 데이터 저장 중 오류: {e}")
+        logger.debug(traceback.format_exc())
         return None
 
 def evaluate_trading_decision(analysis_result):
@@ -408,6 +449,8 @@ def evaluate_trading_decision(analysis_result):
     sl_pct = analysis_result.get('stop_loss_percentage', 0)
     tp_pct = analysis_result.get('take_profit_percentage', 0)
     reasoning = analysis_result.get('reasoning', '')
+    api_cost = analysis_result.get('api_cost', 0.0)
+    total_tokens = analysis_result.get('usage_data', {}).get('total_tokens', 0)
     
     # 요약 구성
     if direction == 'NO_POSITION':
@@ -420,5 +463,8 @@ def evaluate_trading_decision(analysis_result):
     # 간략한 이유 추가 (200자 제한)
     reason_summary = reasoning[:200] + "..." if len(reasoning) > 200 else reasoning
     summary += f"\n\n근거: {reason_summary}"
+    
+    # 비용 정보 추가
+    summary += f"\n(비용: ${api_cost:.6f}, 토큰: {total_tokens})"
     
     return summary 

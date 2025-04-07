@@ -26,6 +26,7 @@ def setup_database():
     거래 기록과 AI 분석 결과를 저장하기 위한 테이블을 생성합니다.
     - trades: 모든 거래 정보 (진입가, 청산가, 손익 등)
     - ai_analysis: AI의 분석 결과 및 추천 사항
+    - daily_api_costs: 일일 AI API 사용 비용
     """
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -66,7 +67,21 @@ def setup_database():
         take_profit_percentage REAL NOT NULL,     -- 추천 테이크프로핏 비율
         reasoning TEXT NOT NULL,                  -- 분석 근거 설명
         trade_id INTEGER,                         -- 연결된 거래 ID
+        completion_tokens INTEGER,                -- 사용된 출력 토큰 수
+        prompt_tokens INTEGER,                    -- 사용된 입력 토큰 수
+        total_tokens INTEGER,                     -- 사용된 총 토큰 수
+        api_cost REAL,                            -- 해당 API 호출 비용
         FOREIGN KEY (trade_id) REFERENCES trades (id)  -- 외래 키 설정
+    )
+    ''')
+    
+    # 일일 API 비용 테이블
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS daily_api_costs (
+        date TEXT PRIMARY KEY,             -- 날짜 (YYYY-MM-DD)
+        total_cost REAL NOT NULL DEFAULT 0, -- 해당 날짜의 누적 API 비용
+        total_calls INTEGER NOT NULL DEFAULT 0, -- 해당 날짜의 총 API 호출 수
+        total_tokens INTEGER NOT NULL DEFAULT 0  -- 해당 날짜의 총 토큰 사용량
     )
     ''')
     
@@ -80,20 +95,61 @@ def setup_database():
     conn.close()
     print("데이터베이스 설정 완료")
 
-def save_ai_analysis(analysis_data, trade_id=None):
+def update_daily_api_cost(date_str, cost, tokens, calls=1):
     """
-    AI 분석 결과를 데이터베이스에 저장
-    
+    지정된 날짜의 API 사용 비용 및 호출 수를 업데이트합니다.
+    해당 날짜의 레코드가 없으면 새로 생성합니다.
+
+    매개변수:
+        date_str (str): 날짜 (YYYY-MM-DD 형식)
+        cost (float): 추가할 비용
+        tokens (int): 추가할 토큰 수
+        calls (int): 추가할 호출 수 (기본값 1)
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # INSERT OR IGNORE: 해당 날짜 레코드가 없으면 기본값으로 생성
+        cursor.execute("""
+        INSERT OR IGNORE INTO daily_api_costs (date) VALUES (?)
+        """, (date_str,))
+        
+        # UPDATE: 기존 값에 새로운 비용, 토큰, 호출 수를 더함
+        cursor.execute("""
+        UPDATE daily_api_costs
+        SET total_cost = total_cost + ?,
+            total_tokens = total_tokens + ?,
+            total_calls = total_calls + ?
+        WHERE date = ?
+        """, (cost, tokens, calls, date_str))
+        
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        print(f"일일 API 비용 업데이트 중 오류: {e}")
+    finally:
+        conn.close()
+
+def save_ai_analysis(analysis_data, trade_id=None, usage_data=None, api_cost=0.0):
+    """
+    AI 분석 결과를 데이터베이스에 저장 (토큰 사용량 및 비용 포함)
+
     매개변수:
         analysis_data (dict): AI 분석 결과 데이터
         trade_id (int, optional): 연결된 거래 ID
-        
+        usage_data (dict, optional): API 사용량 데이터 (예: {'completion_tokens': 100, 'prompt_tokens': 50, 'total_tokens': 150})
+        api_cost (float, optional): 해당 API 호출 비용
+
     반환값:
         int: 생성된 분석 기록의 ID
     """
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
+    completion_tokens = usage_data.get('completion_tokens', 0) if usage_data else 0
+    prompt_tokens = usage_data.get('prompt_tokens', 0) if usage_data else 0
+    total_tokens = usage_data.get('total_tokens', 0) if usage_data else 0
+
     try:
         cursor.execute('''
         INSERT INTO ai_analysis (
@@ -105,20 +161,28 @@ def save_ai_analysis(analysis_data, trade_id=None):
             stop_loss_percentage, 
             take_profit_percentage, 
             reasoning,
-            trade_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            trade_id,
+            completion_tokens,
+            prompt_tokens,
+            total_tokens,
+            api_cost
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            datetime.now().isoformat(),  # 현재 시간
-            analysis_data.get('current_price', 0),  # 현재 가격
-            analysis_data.get('direction', 'NO_POSITION'),  # 추천 방향
-            analysis_data.get('recommended_position_size', 0),  # 추천 포지션 크기
-            analysis_data.get('recommended_leverage', 0),  # 추천 레버리지
-            analysis_data.get('stop_loss_percentage', 0),  # 스탑로스 비율
-            analysis_data.get('take_profit_percentage', 0),  # 테이크프로핏 비율
-            analysis_data.get('reasoning', ''),  # 분석 근거
-            trade_id  # 연결된 거래 ID
+            datetime.now().isoformat(),
+            analysis_data.get('current_price', 0),
+            analysis_data.get('direction', 'NO_POSITION'),
+            analysis_data.get('recommended_position_size', 0),
+            analysis_data.get('recommended_leverage', 0),
+            analysis_data.get('stop_loss_percentage', 0),
+            analysis_data.get('take_profit_percentage', 0),
+            analysis_data.get('reasoning', ''),
+            trade_id,
+            completion_tokens,
+            prompt_tokens,
+            total_tokens,
+            api_cost
         ))
-        
+
         analysis_id = cursor.lastrowid
         conn.commit()
         return analysis_id

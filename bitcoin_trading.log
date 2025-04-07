@@ -117,3 +117,25 @@
 
 근거: 시장 분석 결과, 여러 타임프레임 간에 상충되는 신호가 나타납니다. 15분 차트에서는 단기 상승 추세와 과매수 상태(RSI 77.05)를 보이지만, 1시간 및 4시간 차트에서는 장기 하락 추세(SMA7 < SMA21)가 우세합니다. 특히 4시간 차트의 RSI는 23.86으로 과매도 상태에 있어 기술적 반등 가능성을 시사하지만, 이는 주된 하락 추세 내에서의...
 2025-04-07 19:29:03 - INFO - 거래 실행 결과: HOLD - SUCCESS
+2025-04-07 19:30:05 - INFO - 현재 BTC/USDT 가격: $77,196.70
+2025-04-07 19:30:05 - INFO - 시장 분석 수행 중...
+2025-04-07 19:30:05 - INFO - AI 분석 요청 중...
+2025-04-07 19:30:06 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2025-04-07 19:30:17 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2025-04-07 19:30:28 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2025-04-07 19:30:28 - WARNING - AI 분석을 완료할 수 없습니다.
+2025-04-07 19:31:35 - INFO - 현재 BTC/USDT 가격: $77,152.00
+2025-04-07 19:31:35 - INFO - 시장 분석 수행 중...
+2025-04-07 19:31:35 - INFO - AI 분석 요청 중...
+2025-04-07 19:31:36 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2025-04-07 19:31:47 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2025-04-07 19:31:59 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2025-04-07 19:31:59 - WARNING - AI 분석을 완료할 수 없습니다.
+2025-04-07 19:33:06 - INFO - 현재 BTC/USDT 가격: $77,267.40
+2025-04-07 19:33:06 - INFO - 시장 분석 수행 중...
+2025-04-07 19:33:06 - INFO - AI 분석 요청 중...
+2025-04-07 19:33:07 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2025-04-07 19:33:18 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2025-04-07 19:33:29 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2025-04-07 19:33:29 - WARNING - AI 분석을 완료할 수 없습니다.
+2025-04-07 19:33:45 - INFO - 프로그램 종료
