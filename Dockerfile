@@ -1,5 +1,5 @@
 # Python 3.11 슬림 버전을 기반 이미지로 사용
-FROM python:3.11-slim
+FROM python:3.13.2-slim
 
 # 작업 디렉토리 설정
 WORKDIR /app

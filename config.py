@@ -128,15 +128,15 @@ else:
 
 # 타이밍 관련 설정
 MAIN_LOOP_INTERVAL = 60             # 메인 루프 간격 (초)
-PRICE_CHECK_INTERVAL = 10           # 가격 체크 간격 (초)
+PRICE_CHECK_INTERVAL = 60           # 가격 체크 간격 (초)
 MIN_DATA_REFRESH_INTERVAL = 5 * 60  # 데이터 갱신 최소 간격 (초)
-POSITION_CHECK_INTERVAL = 5         # 포지션 체크 간격 (초)
+POSITION_CHECK_INTERVAL = 5 * 60         # 포지션 체크 간격 (초)
 
 # 캐시 타임아웃 설정 (초)
 CACHE_TIMEFRAMES = {
-    "15m": 10 * 60,   # 15분 데이터는 10분마다 갱신
-    "1h": 30 * 60,    # 1시간 데이터는 30분마다 갱신
-    "4h": 60 * 60     # 4시간 데이터는 1시간마다 갱신
+    "15m": 15 * 60,   # 15분 데이터는 10분마다 갱신
+    "1h": 60 * 60,    # 1시간 데이터는 30분마다 갱신
+    "4h": 120 * 60     # 4시간 데이터는 1시간마다 갱신
 }
 NEWS_CACHE_TTL = 3600  # 뉴스 캐시 유효 시간 (1시간)
 

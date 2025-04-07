@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # 트레이딩 봇 서비스
   trading_bot:
