@@ -21,7 +21,7 @@ BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")  # 바이낸스 시크릿 �
 # OpenRouter API 설정
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")  # OpenRouter API 키
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")  # OpenRouter 모델
-OPENROUTER_REFERER = "https://github.com/hancy87/autotrade"  # 필요한 경우 수정
+OPENROUTER_REFERER = "https://github.com/hancy87/AITrading"  # 필요한 경우 수정
 OPENROUTER_TITLE = "AI-Trading-Bot"
 
 # SERP API 설정 (뉴스 데이터 수집용)
@@ -35,7 +35,7 @@ DRY_RUN = os.getenv("DRY_RUN", "False").lower() in ["true", "t", "1", "yes", "y"
 
 # API 및 요청 관련 설정
 MAX_API_RETRIES = 3                 # API 호출 재시도 최대 횟수
-MAX_REASONING_LENGTH = 1000         # 분석 내용 저장 시 최대 길이 제한
+MAX_REASONING_LENGTH = 5000         # 분석 내용 저장 시 최대 길이 제한
 
 # AI API 비용 설정 (폴백 값 및 동적 로딩)
 # 폴백 값 (모델 정보 로딩 실패 시 사용)
@@ -127,7 +127,7 @@ else:
     MODEL_COST_OUTPUT_PER_MILLION_TOKENS = FALLBACK_COST_OUTPUT_PER_MILLION_TOKENS
 
 # 타이밍 관련 설정
-MAIN_LOOP_INTERVAL = 60             # 메인 루프 간격 (초)
+MAIN_LOOP_INTERVAL = 600             # 메인 루프 간격 (초)
 PRICE_CHECK_INTERVAL = 60           # 가격 체크 간격 (초)
 MIN_DATA_REFRESH_INTERVAL = 5 * 60  # 데이터 갱신 최소 간격 (초)
 POSITION_CHECK_INTERVAL = 5 * 60         # 포지션 체크 간격 (초)
