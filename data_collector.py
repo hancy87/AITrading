@@ -173,7 +173,7 @@ def get_market_data(exchange):
 
 def get_crypto_news(max_results=10):
     """
-    암호화폐 관련 최신 뉴스 조회
+    암호화폐 관련 최신 뉴스 조회 (SearXNG API 사용)
     
     매개변수:
         max_results: 조회할 최대 뉴스 수
@@ -186,23 +186,19 @@ def get_crypto_news(max_results=10):
     if _cache["news"]["data"] and cache_age < NEWS_CACHE_TTL:
         return _cache["news"]["data"][:max_results]
     
-    # API 키가 없으면 빈 리스트 반환
-    if not SERP_API_KEY:
-        print("SERP API 키가 설정되지 않아 뉴스 데이터를 가져올 수 없습니다.")
-        return []
-    
     try:
-        # API 호출 파라미터 설정
+        # SearXNG API 호출 파라미터 설정
         params = {
-            'engine': 'google_news',
             'q': 'Bitcoin cryptocurrency market',
-            'tbm': 'nws',
-            'api_key': SERP_API_KEY,
-            'num': max_results
+            # 'categories': 'news',
+            'format': 'json',
+            'time_range': 'day',
+            # 'engines': 'google_news',
+            'results': max_results
         }
         
-        # API 호출
-        api_result = requests.get('https://serpapi.com/search', params=params)
+        # SearXNG API 호출
+        api_result = requests.get('https://searxng.hancy.kr/search', params=params)
         
         if api_result.status_code != 200:
             print(f"뉴스 API 오류: {api_result.status_code}")
@@ -215,14 +211,14 @@ def get_crypto_news(max_results=10):
         news_results = []
         
         # 뉴스 결과 파싱
-        if 'news_results' in search_results:
-            for item in search_results['news_results'][:max_results]:
+        if 'results' in search_results:
+            for item in search_results['results'][:max_results]:
                 news_results.append({
                     'title': item.get('title', ''),
-                    'link': item.get('link', ''),
-                    'source': item.get('source', ''),
-                    'date': item.get('date', ''),
-                    'snippet': item.get('snippet', '')
+                    'link': item.get('url', ''),
+                    'source': item.get('engine', ''),
+                    'date': item.get('publishedDate', ''),
+                    'snippet': item.get('content', '')
                 })
         
         # 캐시 업데이트
@@ -533,4 +529,20 @@ def get_full_market_analysis(exchange):
         return analysis_result
     except Exception as e:
         print(f"시장 분석 중 오류 발생: {e}")
-        return None 
+        return None
+
+if __name__ == "__main__":
+    print("--- 암호화폐 뉴스 조회 테스트 ---")
+    news = get_crypto_news(max_results=10) # 테스트를 위해 5개의 뉴스만 가져옵니다.
+
+    if news:
+        print(f"총 {len(news)}개의 뉴스 기사를 가져왔습니다:")
+        for i, article in enumerate(news):
+            print(f"--- 뉴스 {i+1} ---")
+            print(f"  제목: {article.get('title', '제목 없음')}")
+            print(f"  링크: {article.get('link', '링크 없음')}")
+            print(f"  출처: {article.get('source', '출처 없음')}")
+            print(f"  날짜: {article.get('date', '날짜 없음')}")
+            print(f"  요약: {article.get('snippet', '요약 없음')}")
+    else:
+        print("뉴스를 가져오는 데 실패했거나 뉴스가 없습니다.") 
