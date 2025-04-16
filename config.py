@@ -42,6 +42,11 @@ MAX_REASONING_LENGTH = 5000         # 분석 내용 저장 시 최대 길이 제
 FALLBACK_COST_INPUT_PER_MILLION_TOKENS = 0.15 # 예시: gpt-4o-mini 가격
 FALLBACK_COST_OUTPUT_PER_MILLION_TOKENS = 0.6 # 예시: gpt-4o-mini 가격
 
+# 텔레그램 설정
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+
 # 모델 가격 정보 캐시
 _model_pricing_cache = {
     "data": None,

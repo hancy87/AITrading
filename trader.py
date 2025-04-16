@@ -7,6 +7,7 @@ from datetime import datetime
 import traceback
 from config import SYMBOL, DRY_RUN, SIM_CAPITAL, MIN_ORDER_AMOUNT
 from database import save_trade, update_trade_status, get_latest_open_trade
+from notifycations import send_telegram_message
 
 class Trader:
     """
@@ -138,6 +139,25 @@ class Trader:
                 if self.dry_run:
                     self.sim_balance -= investment_amount
                 
+                # 텔레그램 알림 추가 시작
+                try:
+                    side_korean = "롱" if direction == 'LONG' else "숏"
+                    message = (
+                        f"🚀 포지션 진입 ({'시뮬레이션' if self.dry_run else '실전'})\n\n"
+                        f"방향: {side_korean} ({direction})\n"
+                        f"진입 가격: ${entry_price:,.2f}\n"
+                        f"수량: {amount:.8f} BTC\n"
+                        f"투자금: ${investment_amount:,.2f} (자본 대비 {position_size_percentage*100:.1f}%)\n"
+                        f"레버리지: {leverage}x\n"
+                        f"손절가: ${sl_price:,.2f} (-{sl_percentage:.2f}%)\n"
+                        f"익절가: ${tp_price:,.2f} (+{tp_percentage:.2f}%)\n"
+                        f"거래 ID: {trade_id}"
+                    )
+                    send_telegram_message(message)
+                except Exception as notify_err:
+                    print(f"텔레그램 알림 전송 실패 (포지션 진입): {notify_err}")
+                # 텔레그램 알림 추가 끝
+                
                 return trade_data
             else:
                 print("포지션 정보 저장에 실패했습니다.")
@@ -208,7 +228,7 @@ class Trader:
                 self.sim_balance += investment_amount + profit_loss
             
             # 거래 상태 업데이트
-            update_trade_status(
+            update_success = update_trade_status(
                 trade_id=trade_id,
                 status='CLOSED',
                 exit_price=exit_price,
@@ -217,10 +237,34 @@ class Trader:
                 profit_loss_percentage=profit_percentage
             )
             
-            print(f"포지션이 청산되었습니다. ID: {trade_id}")
-            print(f"손익: {'이익' if profit_percentage > 0 else '손실'} ({profit_percentage:.2f}%)")
-            
-            return True
+            if update_success:
+                print(f"포지션이 청산되었습니다. ID: {trade_id}")
+                print(f"손익: {'이익' if profit_percentage > 0 else '손실'} ({profit_percentage:.2f}%)")
+                
+                # 텔레그램 알림 추가 시작
+                try:
+                    result_korean = "이익" if profit_percentage > 0 else "손실"
+                    side_korean = "롱" if action == 'long' else "숏"
+                    message = (
+                        f"✅ 포지션 청산 ({'시뮬레이션' if self.dry_run else '실전'})\n\n"
+                        f"방향: {side_korean}\n"
+                        f"진입 가격: ${entry_price:,.2f}\n"
+                        f"청산 가격: ${exit_price:,.2f}\n"
+                        f"수량: {amount:.8f} BTC\n"
+                        f"레버리지: {leverage}x\n"
+                        f"결과: {result_korean} ({profit_percentage:+.2f}%)\n"
+                        f"손익 금액: ${profit_loss:,.2f}\n"
+                        f"거래 ID: {trade_id}"
+                    )
+                    send_telegram_message(message)
+                except Exception as notify_err:
+                    print(f"텔레그램 알림 전송 실패 (포지션 청산): {notify_err}")
+                # 텔레그램 알림 추가 끝
+                
+                return True
+            else:
+                print("거래 상태 업데이트에 실패했습니다.")
+                return False
         except Exception as e:
             print(f"포지션 청산 중 오류: {e}")
             traceback.print_exc()
