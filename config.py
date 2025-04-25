@@ -132,9 +132,9 @@ else:
     MODEL_COST_OUTPUT_PER_MILLION_TOKENS = FALLBACK_COST_OUTPUT_PER_MILLION_TOKENS
 
 # 타이밍 관련 설정
-MAIN_LOOP_INTERVAL = 600             # 메인 루프 간격 (초)
+MAIN_LOOP_INTERVAL = 60*60             # 메인 루프 간격 (초)
 PRICE_CHECK_INTERVAL = 60           # 가격 체크 간격 (초)
-MIN_DATA_REFRESH_INTERVAL = 5 * 60  # 데이터 갱신 최소 간격 (초)
+MIN_DATA_REFRESH_INTERVAL =  60*30  # 데이터 갱신 최소 간격 (초)
 POSITION_CHECK_INTERVAL = 5 * 60         # 포지션 체크 간격 (초)
 
 # 캐시 타임아웃 설정 (초)
