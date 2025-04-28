@@ -287,9 +287,11 @@ def update_trade_status(trade_id, status, exit_price=None, exit_timestamp=None, 
         
         cursor.execute(update_sql, update_values)
         conn.commit()
+        return True # 성공 시 True 반환
     except Exception as e:
         conn.rollback()
         print(f"거래 상태 업데이트 중 오류: {e}")
+        return False # 실패 시 False 반환
     finally:
         conn.close()
 
